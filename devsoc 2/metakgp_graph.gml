@@ -17870,4 +17870,69 @@ graph [
     label "https://wiki.metakgp.org/wiki/AG60109:_Soil_Dynamics_In_Tillage_And_Traction"
     title "AG60109: Soil Dynamics In Tillage And Traction"
   ]
+  node [
+    id 3574
+    label "who are the governors of tfps?"
+    answer "The governors of TFPS are not mentioned in the context. However, there is information about the governors of TLS. Since TFPS is not mentioned, the answer would be:&#10;&#10;Information missing."
+  ]
+  node [
+    id 3575
+    label "who are the governors of Encore?"
+    answer "The current governors for the session 2024-25 are Anupam Mehrotra (HS'26), Bhagya Jyothi (GG'27), Sumanth Javvaji (EE'27), Yash Raj (MF'26)."
+  ]
+  node [
+    id 3576
+    label "Who are the governors of Business Club?"
+    answer "The governors of the Business Club are in their third year of study, and they are part of the executive body along with the Heads. They are responsible for heading various wings of the club and its management. However, specific names or identities of the governors are not provided in the context."
+  ]
+  node [
+    id 3577
+    label "what is 2.0?"
+    answer "2.0 refers to the credit hours or units for a particular course, with 2 hours of lecture (L) and 0 hours of tutorial (T) and practical (P)."
+  ]
+  node [
+    id 3578
+    label "what is 2.2?"
+    answer "2.2 refers to the central circuit road in the campus, which is 2.2 kilometers in length."
+  ]
+  node [
+    id 3579
+    label "Meghnadh Saha Hall"
+    answer "Meghnadh Saha Hall of Residence was founded on 2 June 2001. Its motto is &#34;Ubi Concordia, Ibi Victoria&#34;. The hall has a capacity of 510 and provides accommodation for males, with single room types available. The hall has various facilities, including eateries such as Anil Night Canteen and shops like Tiwari General Store, Juice Shop, and Choti Tapri. The current warden is Prof. Maruthi Manoj Brundavanam, and the hall president is Dhanush k s."
+  ]
+  node [
+    id 3580
+    label "TSG??"
+    answer "TSG stands for Technology Students' Gymkhana. It is the students' council of IIT Kharagpur."
+  ]
+  node [
+    id 3581
+    label "what is TSG"
+    answer "TSG stands for Technology Students' Gymkhana.&#10;&#10;The list of names mentioned in the context for contact purposes is:&#10;1. Dhiraj Meshram&#10;2. Himesh Kothari&#10;3. Tejas Ambhore&#10;4. Yash Jadhav&#10;5. William K. Mohanty (President, TSG)"
+  ]
+  node [
+    id 3582
+    label "who are the governors of 180DC?"
+    answer "The governors of 180DC for the mentioned years are:&#10;&#10;- 2018-19: Utkarsh Kumar, Pushpendra Singh Rathore, Priyang Mani Tripathi, Aamol Lohani&#10;- 2017-18: Nihal Gupta, Vaibhav Agrawal, Raju Bhakar&#10;- 2016-17: Amey Muley, Akash Khandelwal, Karan Gupta&#10;&#10;However, the information for the current year (2024-25 or 2025-26) is not provided under the &#34;Governors&#34; section. Therefore, for the current year, the answer is:&#10;&#10;Information missing."
+  ]
+  node [
+    id 3583
+    label "who are the advisors of 180dc?"
+    answer "The advisors of 180DC for the year 2025-2026 are:&#10;&#10;1. Sushant Jha&#10;2. Sagar Kumar&#10;3. Rishabh Mishra&#10;4. Jagori Bandyopadhyay&#10;5. Sudeep Bhurat&#10;6. Shristi Singh&#10;7. Parag Agarwal&#10;8. Gaurav Jindal&#10;9. Ataullah Baig&#10;10. Abhishek Das&#10;11. Vihar Davuluri&#10;12. Sreelekshmi Kishore"
+  ]
+  node [
+    id 3584
+    label "who are the advisers of 180dc?"
+    answer "The advisers of 180DC for the year 2025-2026 are:&#10;&#10;1. Sushant Jha&#10;2. Sagar Kumar&#10;3. Rishabh Mishra&#10;4. Jagori Bandyopadhyay&#10;5. Sudeep Bhurat&#10;6. Shristi Singh&#10;7. Parag Agarwal&#10;8. Gaurav Jindal&#10;9. Ataullah Baig&#10;10. Abhishek Das&#10;11. Vihar Davuluri&#10;12. Sreelekshmi Kishore"
+  ]
+  node [
+    id 3585
+    label "WHO ARE THE ADVISERS OF 180DC?"
+    answer "The advisers of 180DC for the years 2024-2025 are:&#10;&#10;1. Aditya Dubey&#10;2. Roshni Biswas&#10;3. Sourashis Chattopadhyay&#10;4. Samyak Jain&#10;5. Sushant Jha&#10;6. Sagar Kumar&#10;7. Rishabh Mishra&#10;8. Jagori Bandyopadhyay&#10;9. Veeransh Mehta&#10;10. Sudeep Bhurat&#10;&#10;And for the year 2025-2026, the advisers are:&#10;&#10;1. Sushant Jha&#10;2. Sagar Kumar&#10;3. Rishabh Mishra&#10;4. Jagori Bandyopadhyay&#10;5. Sudeep Bhurat&#10;6. Shristi Singh&#10;7. Parag Agarwal&#10;8. Gaurav Jindal&#10;9. Ataullah Baig&#10;10. Sreelekshmi Kishore&#10;11. Abhishek Das &#10;12. Vihar Davuluri"
+  ]
+  node [
+    id 3586
+    label "Nehru Hall of Residence"
+    answer "Nehru Hall of Residence was founded on 3rd March, 1954. The motto of Nehru Hall is &#2360;&#2366; &#2357;&#2367;&#2342;&#2381;&#2351;&#2366; &#2351;&#2366; &#2357;&#2367;&#2350;&#2369;&#2325;&#2381;&#2340;&#2351;&#2375;, which translates to &#34;Knowledge Leads to Enlightenment&#34;. It is located in PAN loop and is the second oldest hall of residence, with a capacity of around 440 male students. The hall has various facilities, including eateries like Ashim's Food Canteen and Cathleen Night Canteen, and shops like Gupta Store. The warden of Nehru Hall is Prof. Mrinal Kaushik, and the assistant wardens are Prof. Ronit Mandal, Prof. Brajesh Kumar Panda, and Prof. Mrigank Sharad."
+  ]
 ]

@@ -110,45 +110,15 @@ class ThoughtNode:
         self.verified = False
         self.score = 0
 
-# --- GRAPH OF THOUGHTS ENGINE ---
-
-class ThoughtNode:
-    def __init__(self, id, question):
-        self.id = id
-        self.question = question
-        self.retrieved_context = ""
-        self.derived_thought = ""
-        self.verified = False
-        self.score = 0
-
 def planner_agent(query):
     """
-    Step 1: DECOMPOSITION & TRANSLATION
-    Breaks the query into steps AND expands acronyms to full names.
+    Step 1: DECOMPOSITION
+    Breaks the user query into a logical dependency graph (list of steps).
     """
     system_prompt = """
-    You are an expert Query Planner for IIT Kharagpur (MetaKGP).
-    
-    Your Goal: Break the user's query into simple, searchable sub-questions.
-    
-    CRITICAL RULE: The database does NOT understand acronyms. You MUST expand them.
-    
-    Use this Dictionary:
-    - TFPS -> Technology Film and Photography Society
-    - TLS -> Technology Literary Society
-    - TSG -> Technology Students' Gymkhana
-    - Gymkhana -> Technology Students' Gymkhana
-    - RP / RP Hall -> Rajendra Prasad Hall of Residence
-    - RK / RK Hall -> Radhakrishnan Hall of Residence
-    - HMC -> Hall Management Centre
-    -  VP -> Vice President
-    -  GSec -> General Secretary
-    
-    Example:
-    User: "Who is the VP of TFPS?"
-    Output: ["Who is the Vice President of Technology Film and Photography Society?"]
-    
-    Return ONLY a valid JSON list of strings.
+    You are a Planning Agent. Break the user's complex query into small, searchable sub-questions.
+    Return ONLY a JSON list of strings.
+    Example: ["Who is the governor?", "When was the society established?"]
     """
     prompt = f"User Query: {query}\n\nPlan:"
     
@@ -157,36 +127,30 @@ def planner_agent(query):
     
     # Clean the response to ensure it's valid JSON
     try:
+        # Sometimes LLMs add text around the JSON, we try to strip it
         start = response.find('[')
         end = response.rfind(']') + 1
         plan = json.loads(response[start:end])
         return plan
     except:
-        return [query] # Fallback
-    
-def execution_agent(node, vector_db, graph_context):
-    """
-    Step 2: RETRIEVAL & DRAFTING
-    For a single sub-question, retrieve facts and generate a draft thought.
-    """
-    # A. Retrieve specific facts for this sub-step
-    retriever = vector_db.as_retriever(search_kwargs={"k": 2})
-    docs = retriever.invoke(node.question)
-    context_text = "\n".join([d.page_content for d in docs])
-    node.retrieved_context = context_text
-    
-    # B. Draft a thought
-    prompt = f"""
-    Sub-Question: {node.question}
-    Context from Database: {context_text}
-    Context from Knowledge Graph: {graph_context}
-    
-    Based ONLY on the context, answer the sub-question. 
-    If the info is missing, state "Information missing."
-    """
-    node.derived_thought = llm.invoke(prompt).content
-    return node
+        return [query] # Fallback: Just treat the original query as the only step
 
+def execution_agent(node, vector_db, graph_context):
+    # Retrieve
+    retriever = vector_db.as_retriever(search_kwargs={"k": 5}) # Fetch top 5 chunks
+    docs = retriever.invoke(node.question)
+    
+    # --- DEBUGGING START ---
+    print(f"\n[DEBUG] Searching for: '{node.question}'")
+    print(f"[DEBUG] Found {len(docs)} chunks.")
+    for i, doc in enumerate(docs):
+        print(f"--- Chunk {i+1} ---")
+        print(doc.page_content[:300]) # Print first 300 characters
+        print("------------------")
+    # --- DEBUGGING END ---
+    
+    context_text = "\n".join([d.page_content for d in docs])
+    # ... rest of code ...
 def verification_agent(node):
     """
     Step 3: MoE VERIFICATION (The "Judge")
@@ -262,6 +226,7 @@ def generate_response_got(query):
     print(f" [GoT] 4. Synthesizing Final Answer...")
     final_answer = synthesis_agent(query, nodes)
     return final_answer
+
 
 # --- CONFIGURATION ---
 GOOGLE_API_KEY = "AIzaSyAsgcIwteMXQzve95ki1gTeIMMlq7zGGo8" # Keep this for Embeddings
