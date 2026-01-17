@@ -584,16 +584,17 @@ def generate_response_got(query):
     final_answer = synthesis_agent(query, nodes)
     return final_answer
 
-# 5. START CHATTING
-print("\nBOT IS READY! (Type 'exit' to stop)")
-while True:
-    q = input("\nYou: ")
-    if q.lower() in ["exit", "quit"]:
-        break
-    
-    try:
-        # CHANGED: Now calling the Graph of Thoughts function
-        response = generate_response_got(q)
-        print(f"\nBot: {response}")
-    except Exception as e:
-        print(f"Error: {e}")
+# 5. START CHATTING (Only when running bot.py directly, not when imported by app.py)
+if __name__ == '__main__':
+    print("\nBOT IS READY! (Type 'exit' to stop)")
+    while True:
+        q = input("\nYou: ")
+        if q.lower() in ["exit", "quit"]:
+            break
+        
+        try:
+            # CHANGED: Now calling the Graph of Thoughts function
+            response = generate_response_got(q)
+            print(f"\nBot: {response}")
+        except Exception as e:
+            print(f"Error: {e}")

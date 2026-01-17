@@ -17943,6 +17943,11 @@ graph [
   node [
     id 3588
     label "What is Nalanda"
-    answer "Nalanda is one of the biggest complexes in India with a capacity of 30,000 students. According to the context, &#34;It is one of the biggest complexes in India with a capacity of 30,000 Students.&#34;"
+    answer "Nalanda is a complex in India with a capacity of 30,000 students, as stated in the context: &#34;It is one of the biggest complexes in India with a capacity of 30,000 Students.&#34;"
+  ]
+  node [
+    id 3589
+    label "What does 2.2 mean in the context of IIT Kharagpur"
+    answer "According to the given context, &#34;2.2&#34; in the context of IIT Kharagpur refers to &#34;a 2.2 km circular track at the centre of the campus, or a run of it.&#34; (Source: The provided list of slang words and phrases used at IIT Kharagpur, under the entry for &#34;2.2&#34;)"
   ]
 ]
