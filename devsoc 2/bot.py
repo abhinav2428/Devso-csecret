@@ -1,5 +1,7 @@
 
 import os
+import json
+import re
 import networkx as nx
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
@@ -16,17 +18,50 @@ class ThoughtNode:
         self.derived_thought = ""
         self.verified = False
         self.score = 0
+        self.reasoning_paths = []  # NEW: Store multiple reasoning paths
 
-# --- GRAPH OF THOUGHTS ENGINE ---
 
-class ThoughtNode:
-    def __init__(self, id, question):
-        self.id = id
-        self.question = question
-        self.retrieved_context = ""
-        self.derived_thought = ""
-        self.verified = False
-        self.score = 0
+class ReasoningPath:
+    """Represents a single reasoning path/hypothesis with expert evaluations"""
+    def __init__(self, path_id, claim, context, source_info=""):
+        self.path_id = path_id
+        self.claim = claim
+        self.context = context
+        self.source_info = source_info
+        
+        # Expert evaluations
+        self.source_match_verdict = None
+        self.source_match_conf = 0.0
+        self.source_match_reason = ""
+        
+        self.halluc_verdict = None
+        self.halluc_conf = 0.0
+        self.halluc_details = ""
+        
+        self.logic_verdict = None
+        self.logic_conf = 0.0
+        self.logic_reason = ""
+        
+        # Final evaluation
+        self.is_verified = False
+        self.final_score = 0.0
+        self.failure_reasons = []
+    
+    def get_consensus_score(self):
+        """Calculate consensus score from all three experts"""
+        if (self.source_match_verdict is None or 
+            self.halluc_verdict is None or 
+            self.logic_verdict is None):
+            return 0.0
+        
+        avg_conf = (self.source_match_conf + self.halluc_conf + self.logic_conf) / 3
+        return avg_conf
+    
+    def is_expert_consensus_passed(self):
+        """Check if all experts agree (consensus)"""
+        return (self.source_match_verdict and 
+                (not self.halluc_verdict) and  # False means no hallucination
+                self.logic_verdict)
 
 def planner_agent(query):
     """
@@ -73,102 +108,372 @@ def planner_agent(query):
     
 def execution_agent(node, vector_db, graph_context):
     """
-    Step 2: RETRIEVAL & DRAFTING
-    For a single sub-question, retrieve facts and generate a draft thought.
+    Step 2: RETRIEVAL & DRAFTING - MULTI-PATH VERSION
+    Retrieves multiple contexts and generates multiple reasoning paths.
+    
+    Each path represents a potential answer with its source context.
     """
-    # A. Retrieve specific facts for this sub-step
-    retriever = vector_db.as_retriever(search_kwargs={"k": 2})
+    # A. Retrieve multiple relevant chunks
+    print(f"    Retrieving contexts for: {node.question}")
+    retriever = vector_db.as_retriever(search_kwargs={"k": 5})  # Get 5 chunks
     docs = retriever.invoke(node.question)
-    context_text = "\n".join([d.page_content for d in docs])
-    node.retrieved_context = context_text
     
-    # B. Draft a thought
-    prompt = f"""
-    Sub-Question: {node.question}
-    Context from Database: {context_text}
-    Context from Knowledge Graph: {graph_context}
+    node.retrieved_context = "\n".join([d.page_content for d in docs])
     
-    Based ONLY on the context, answer the sub-question. 
-    If the info is missing, state "Information missing."
-    """
-    node.derived_thought = llm.invoke(prompt).content
+    # B. Generate multiple reasoning paths from different contexts
+    print(f"    Generating multiple reasoning paths...")
+    
+    # Path 1: Direct answer from primary context
+    if docs:
+        primary_context = docs[0].page_content
+        prompt_path1 = f"""
+        Sub-Question: {node.question}
+        Primary Context: {primary_context}
+        
+        Based ONLY on this context, answer the sub-question directly.
+        Be specific and cite what the source says.
+        """
+        path1_claim = llm.invoke(prompt_path1).content
+        path1 = ReasoningPath(0, path1_claim, primary_context, "Primary Source")
+        node.reasoning_paths.append(path1)
+    
+    # Path 2: Synthesized answer from multiple contexts
+    if len(docs) > 1:
+        multi_context = "\n".join([d.page_content for d in docs[:3]])
+        prompt_path2 = f"""
+        Sub-Question: {node.question}
+        Multiple Contexts: {multi_context}
+        
+        Synthesize an answer using ALL available contexts.
+        Mention which sources support each claim.
+        """
+        path2_claim = llm.invoke(prompt_path2).content
+        path2 = ReasoningPath(1, path2_claim, multi_context, "Multi-Source Synthesis")
+        node.reasoning_paths.append(path2)
+    
+    # Path 3: Time-aware answer (if asking about current/historical info)
+    if "current" in node.question.lower() or "2025" in node.question.lower():
+        prompt_path3 = f"""
+        Sub-Question: {node.question}
+        Available Context: {node.retrieved_context}
+        
+        This query asks for CURRENT information (2025).
+        Extract ONLY claims marked as current, recent, or 2025/2024.
+        Flag any outdated information.
+        """
+        path3_claim = llm.invoke(prompt_path3).content
+        path3 = ReasoningPath(2, path3_claim, node.retrieved_context, "Temporal Filter (2025)")
+        node.reasoning_paths.append(path3)
+    
+    # Set default thought (will be overridden after verification)
+    if node.reasoning_paths:
+        node.derived_thought = node.reasoning_paths[0].claim
+    
     return node
 
-def verification_agent(node):
+# --- MoE VERIFICATION EXPERTS ---
+
+def source_matcher(claim, context):
     """
-    Step 3: MoE VERIFICATION (The "Judge")
-    Checks if the thought is supported by the context.
+    Expert 1: SOURCE MATCHER
+    "Does the text in the retrieved chunk actually support this claim?"
+    Returns: (verdict: bool, confidence: float, reasoning: str)
     """
     prompt = f"""
-    You are a strict Hallucination Hunter.
+    You are a Source Matcher expert. Your job is to verify if a claim is directly supported by source text.
     
-    Claim: {node.derived_thought}
-    Source Text: {node.retrieved_context}
+    CLAIM: {claim}
     
-    Does the Source Text explicitly support the Claim? 
-    Reply with ONLY 'YES' or 'NO'.
+    SOURCE TEXT:
+    {context}
+    
+    Question: Does the SOURCE TEXT explicitly contain information that directly supports this CLAIM?
+    
+    Respond in this exact JSON format:
+    {{
+        "verdict": "YES" or "NO",
+        "confidence": 0.0 to 1.0,
+        "reasoning": "Brief explanation of why the claim is or isn't supported"
+    }}
+    
+    Be STRICT: The source must actually contain the claim, not just related information.
     """
-    verdict = llm.invoke(prompt).content.strip().upper()
+    try:
+        response = llm.invoke(prompt).content
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            result = json.loads(json_match.group())
+            return (result.get("verdict") == "YES", 
+                    result.get("confidence", 0.5),
+                    result.get("reasoning", ""))
+    except:
+        pass
+    return (False, 0.3, "Error parsing source matcher response")
+
+
+def hallucination_hunter(claim, context, original_query):
+    """
+    Expert 2: HALLUCINATION HUNTER
+    "Is the bot inventing details not present in the scraped context?"
+    Returns: (is_hallucination: bool, confidence: float, invented_details: str)
+    """
+    prompt = f"""
+    You are a Hallucination Hunter expert. Your job is to detect if the bot is making up details.
     
-    if "YES" in verdict:
-        node.verified = True
-        node.score = 10
+    ORIGINAL QUERY: {original_query}
+    CLAIM/RESPONSE: {claim}
+    SCRAPED CONTEXT: {context}
+    
+    Analyze:
+    1. What specific details does the CLAIM make?
+    2. Which of these details are ACTUALLY present in the SCRAPED CONTEXT?
+    3. Which details appear to be INVENTED or INFERRED (not in the context)?
+    
+    Respond in this exact JSON format:
+    {{
+        "is_hallucinating": true or false,
+        "confidence": 0.0 to 1.0,
+        "invented_details": "List specific details that are NOT in the context, or 'None' if everything is grounded"
+    }}
+    
+    Be STRICT: If something isn't explicitly in the context, it's hallucination.
+    """
+    try:
+        response = llm.invoke(prompt).content
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            result = json.loads(json_match.group())
+            return (result.get("is_hallucinating", False),
+                    result.get("confidence", 0.5),
+                    result.get("invented_details", "Unknown"))
+    except:
+        pass
+    return (True, 0.3, "Error parsing hallucination detector response")
+
+
+def logic_expert(claim, context, question):
+    """
+    Expert 3: LOGIC EXPERT
+    "Does the conclusion follow from the premises?"
+    Returns: (is_logical: bool, confidence: float, reasoning: str)
+    """
+    prompt = f"""
+    You are a Logic Expert. Your job is to verify logical consistency.
+    
+    QUESTION: {question}
+    PREMISES (from context): {context}
+    CONCLUSION (bot's claim): {claim}
+    
+    Analyze:
+    1. Are the premises clearly stated in the context?
+    2. Does the conclusion logically follow from those premises?
+    3. Are there any logical fallacies or unsupported jumps in reasoning?
+    
+    Respond in this exact JSON format:
+    {{
+        "is_logical": true or false,
+        "confidence": 0.0 to 1.0,
+        "reasoning": "Explanation of the logical flow (or lack thereof)"
+    }}
+    
+    Example of LOGICAL: Context says "John is taller than Mary, Mary is taller than Sam" → Conclusion "John is taller than Sam" ✓
+    Example of ILLOGICAL: Context says "Cats are animals" → Conclusion "Cats can talk" ✗
+    """
+    try:
+        response = llm.invoke(prompt).content
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if json_match:
+            result = json.loads(json_match.group())
+            return (result.get("is_logical", False),
+                    result.get("confidence", 0.5),
+                    result.get("reasoning", ""))
+    except:
+        pass
+    return (False, 0.3, "Error parsing logic expert response")
+
+
+def evaluate_reasoning_path(path, original_query, question):
+    """
+    Run all three experts on a single reasoning path.
+    Updates the path object with expert verdicts.
+    """
+    # Expert 1: Source Matcher
+    path.source_match_verdict, path.source_match_conf, path.source_match_reason = source_matcher(
+        path.claim, 
+        path.context
+    )
+    
+    # Expert 2: Hallucination Hunter
+    path.halluc_verdict, path.halluc_conf, path.halluc_details = hallucination_hunter(
+        path.claim,
+        path.context,
+        original_query
+    )
+    
+    # Expert 3: Logic Expert
+    path.logic_verdict, path.logic_conf, path.logic_reason = logic_expert(
+        path.claim,
+        path.context,
+        question
+    )
+    
+    # Calculate final score and verdict
+    path.final_score = path.get_consensus_score()
+    path.is_verified = path.is_expert_consensus_passed() and path.final_score > 0.6
+    
+    # Capture failure reasons
+    if not path.source_match_verdict:
+        path.failure_reasons.append("Source not found")
+    if path.halluc_verdict:
+        path.failure_reasons.append("Hallucination detected")
+    if not path.logic_verdict:
+        path.failure_reasons.append("Illogical reasoning")
+    
+    return path
+
+
+def rank_reasoning_paths(node, original_query):
+    """
+    Evaluate all reasoning paths and rank them by verification score.
+    Returns sorted list of paths (best first).
+    """
+    print(f"\n   [MoE] Evaluating {len(node.reasoning_paths)} reasoning paths...")
+    
+    for i, path in enumerate(node.reasoning_paths):
+        print(f"\n   ╔═ Path {i+1}: {path.source_info}")
+        print(f"   ║ Claim: {path.claim[:100]}...")
+        
+        # Run all experts on this path
+        evaluate_reasoning_path(path, original_query, node.question)
+        
+        # Display expert verdicts
+        print(f"   ║ ├─ Source Matcher: {path.source_match_verdict} (conf: {path.source_match_conf:.2f})")
+        print(f"   ║ │  └─ {path.source_match_reason}")
+        print(f"   ║ ├─ Hallucination: {not path.halluc_verdict} (conf: {path.halluc_conf:.2f})")
+        if path.halluc_details != "None":
+            print(f"   ║ │  └─ {path.halluc_details}")
+        print(f"   ║ ├─ Logic: {path.logic_verdict} (conf: {path.logic_conf:.2f})")
+        print(f"   ║ │  └─ {path.logic_reason}")
+        
+        if path.is_verified:
+            print(f"   ║ └─ VERDICT: ✓ VERIFIED (Score: {path.final_score:.2f}/1.0)")
+        else:
+            reasons = ", ".join(path.failure_reasons) if path.failure_reasons else "Low confidence"
+            print(f"   ║ └─ VERDICT: ✗ REJECTED ({reasons})")
+    
+    # Sort by verification status (verified first) then by score
+    ranked_paths = sorted(
+        node.reasoning_paths,
+        key=lambda p: (p.is_verified, p.final_score),
+        reverse=True
+    )
+    
+    return ranked_paths
+
+
+def verification_agent(node, original_query):
+    """
+    Step 3: MoE VERIFICATION - COMPETITIVE EVALUATION
+    Evaluates all reasoning paths against three expert verifiers.
+    Selects the best verified path(s) for the final answer.
+    """
+    if not node.reasoning_paths:
+        # Fallback: create a default path if none exist
+        node.reasoning_paths.append(
+            ReasoningPath(0, node.derived_thought, node.retrieved_context, "Default")
+        )
+    
+    # Rank all paths using expert consensus
+    ranked_paths = rank_reasoning_paths(node, original_query)
+    
+    # Select the best verified path
+    best_path = ranked_paths[0] if ranked_paths else None
+    
+    if best_path:
+        node.derived_thought = best_path.claim
+        node.verified = best_path.is_verified
+        node.score = int(best_path.final_score * 10)
+        
+        print(f"\n   [MoE] FINAL SELECTION: Path '{best_path.source_info}'")
+        print(f"   [MoE] Final Answer: {best_path.claim[:150]}...")
     else:
         node.verified = False
         node.score = 0
-        node.derived_thought = "(Unverified info discarded)"
+        node.derived_thought = "(No reasoning path passed verification)"
     
     return node
 
 def synthesis_agent(original_query, nodes):
     """
-    Step 4: AGGREGATION
-    Combines all verified thoughts into the final answer.
+    Step 4: AGGREGATION - With Source Citations
+    Combines all verified thoughts into the final answer with clear citations.
     """
-    verified_facts = "\n".join([f"- {n.derived_thought}" for n in nodes if n.verified])
+    # Extract verified facts with their sources
+    verified_facts_with_sources = []
+    for n in nodes:
+        if n.verified and n.reasoning_paths:
+            best_path = n.reasoning_paths[0]
+            for path in n.reasoning_paths:
+                if path.is_verified:
+                    best_path = path
+                    break
+            verified_facts_with_sources.append({
+                "fact": best_path.claim,
+                "source": best_path.source_info
+            })
+    
+    facts_text = "\n".join([
+        f"- {f['fact']} (Source: {f['source']})" 
+        for f in verified_facts_with_sources
+    ])
     
     prompt = f"""
     User Query: {original_query}
     
     Verified Facts gathered by researchers:
-    {verified_facts}
+    {facts_text}
     
-    Construct a coherent, helpful final answer using these facts.
-    Cite your sources if possible.
+    Your task:
+    1. Construct a coherent, helpful final answer using ONLY these verified facts
+    2. Maintain source citations throughout
+    3. If multiple paths said the same thing with different sources, mention that
+    4. Be clear about what is verified vs what may have been rejected
+    
+    Format: Clear answer with (Source: XYZ) citations inline.
     """
     return llm.invoke(prompt).content
 
 # --- MAIN ORCHESTRATOR ---
 
-def generate_response_got(query):
-    print(f" [GoT] 1. Planning: Analyzing '{query}'...")
-    plan = planner_agent(query)
-    print(f" [GoT]    Plan: {plan}")
+# def generate_response_got(query):
+#     print(f" [GoT] 1. Planning: Analyzing '{query}'...")
+#     plan = planner_agent(query)
+#     print(f" [GoT]    Plan: {plan}")
     
-    nodes = []
+#     nodes = []
     
-    # Execute the Graph (Sequential for now, can be parallelized)
-    for i, sub_question in enumerate(plan):
-        print(f" [GoT] 2. Executing Step {i+1}: {sub_question}")
+#     # Execute the Graph (Sequential for now, can be parallelized)
+#     for i, sub_question in enumerate(plan):
+#         print(f" [GoT] 2. Executing Step {i+1}: {sub_question}")
         
-        # Create Node
-        node = ThoughtNode(id=i, question=sub_question)
+#         # Create Node
+#         node = ThoughtNode(id=i, question=sub_question)
         
-        # Get Graph Context (using your existing function)
-        g_context = get_graph_context(sub_question)
+#         # Get Graph Context (using your existing function)
+#         g_context = get_graph_context(sub_question)
         
-        # Retrieve & Think
-        node = execution_agent(node, vector_db, g_context)
+#         # Retrieve & Think
+#         node = execution_agent(node, vector_db, g_context)
         
-        # Verify (The MoE Check)
-        node = verification_agent(node)
-        print(f" [GoT] 3. Verification Score: {node.score}/10")
+#         # Verify (The MoE Check)
+#         node = verification_agent(node)
+#         print(f" [GoT] 3. Verification Score: {node.score}/10")
         
-        nodes.append(node)
+#         nodes.append(node)
     
-    print(f" [GoT] 4. Synthesizing Final Answer...")
-    final_answer = synthesis_agent(query, nodes)
-    return final_answer
+#     print(f" [GoT] 4. Synthesizing Final Answer...")
+#     final_answer = synthesis_agent(query, nodes)
+#     return final_answer
 
 # --- CONFIGURATION ---
 GOOGLE_API_KEY = "AIzaSyAsgcIwteMXQzve95ki1gTeIMMlq7zGGo8" # Keep this for Embeddings
@@ -246,7 +551,7 @@ def generate_response_got(query):
         node = ThoughtNode(id=i, question=sub_question)
         g_context = get_graph_context(sub_question)
         node = execution_agent(node, vector_db, g_context)
-        node = verification_agent(node)
+        node = verification_agent(node, query)  # UPDATED: Pass original query
         
         print(f" [GoT] 3. Verification Score: {node.score}/10")
         nodes.append(node)

@@ -17935,4 +17935,14 @@ graph [
     label "Nehru Hall of Residence"
     answer "Nehru Hall of Residence was founded on 3rd March, 1954. The motto of Nehru Hall is &#2360;&#2366; &#2357;&#2367;&#2342;&#2381;&#2351;&#2366; &#2351;&#2366; &#2357;&#2367;&#2350;&#2369;&#2325;&#2381;&#2340;&#2351;&#2375;, which translates to &#34;Knowledge Leads to Enlightenment&#34;. It is located in PAN loop and is the second oldest hall of residence, with a capacity of around 440 male students. The hall has various facilities, including eateries like Ashim's Food Canteen and Cathleen Night Canteen, and shops like Gupta Store. The warden of Nehru Hall is Prof. Mrinal Kaushik, and the assistant wardens are Prof. Ronit Mandal, Prof. Brajesh Kumar Panda, and Prof. Mrigank Sharad."
   ]
+  node [
+    id 3587
+    label "tfps"
+    answer "TFPS stands for Technology Filmmaking &#38; Photography Society."
+  ]
+  node [
+    id 3588
+    label "What is Nalanda"
+    answer "Nalanda is one of the biggest complexes in India with a capacity of 30,000 students. According to the context, &#34;It is one of the biggest complexes in India with a capacity of 30,000 Students.&#34;"
+  ]
 ]
