@@ -109,3 +109,4 @@ config.json
 Thumbs.db
 .AppleDouble
 .LSOverride
+.env
